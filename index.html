@@ -1,137 +1,160 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FEI BAJA SAE - TELEMETRIA</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FEI BAJA SAE - TELEMETRIA</title>
 
-<script src="https://cdn.rawgit.com/Mikhus/canvas-gauges/master/gauge.min.js"></script>
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.rawgit.com/Mikhus/canvas-gauges/master/gauge.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
-body{background:#000510 url('https://www.transparenttextures.com/patterns/stardust.png');color:white;font-family:'Orbitron',sans-serif;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center}
-.star-red{color:#ff0000;text-shadow:0 0 15px #ff0000,0 0 30px #ff0000;animation:shine 1.5s infinite alternate}
-.star-yellow{color:#ffcc00;text-shadow:0 0 10px #ffcc00,0 0 20px #ffcc00;animation:shine 2s infinite alternate}
-@keyframes shine{from{opacity:.6;transform:scale(.9)}to{opacity:1;transform:scale(1.1)}}
-.glass-panel{background:rgba(10,20,40,.95);backdrop-filter:blur(10px);border:3px solid #0096ff;border-radius:30px;box-shadow:0 0 40px rgba(0,150,255,.4);padding:20px}
-.hidden{display:none!important}
-</style>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+        body {
+            background: #000510 url('https://www.transparenttextures.com/patterns/stardust.png');
+            color: white;
+            font-family: 'Orbitron', sans-serif;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .star-red { color: #ff0000; text-shadow: 0 0 15px #ff0000; }
+        .glass-panel {
+            background: rgba(10, 20, 40, 0.95);
+            backdrop-filter: blur(10px);
+            border: 3px solid #0096ff;
+            border-radius: 30px;
+            box-shadow: 0 0 40px rgba(0,150,255,0.4);
+            padding: 20px;
+        }
+        .hidden { display: none !important; }
+        input { color: black; padding: 10px; border-radius: 5px; }
+        button { background: #0096ff; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+    </style>
 </head>
 <body>
 
-<div id="loginWrapper">
-<input type="password" id="password" placeholder="SENHA">
-<button onclick="fazerLogin()">ENTRAR</button>
+<div id="loginWrapper" class="glass-panel text-center">
+    <h1 class="mb-4">ACESSO TELEMETRIA</h1>
+    <input type="password" id="password" placeholder="SENHA">
+    <button onclick="fazerLogin()">ENTRAR</button>
 </div>
 
-<div id="telemetryWrapper" class="hidden">
-<canvas id="rpm-gauge"></canvas>
-<canvas id="speed-gauge"></canvas>
-<h3 id="v-motor">0°C</h3>
-<h3 id="v-cvt">0°C</h3>
-<canvas id="cSpeed"></canvas>
-<canvas id="cRpm"></canvas>
-<canvas id="cTemp"></canvas>
+<div id="telemetryWrapper" class="hidden glass-panel w-full max-w-5xl">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 text-center">
+        <div>
+            <canvas id="rpm-gauge"></canvas>
+            <h2 class="mt-2">RPM</h2>
+        </div>
+        <div>
+            <canvas id="speed-gauge"></canvas>
+            <h2 class="mt-2">VELOCIDADE</h2>
+        </div>
+    </div>
+    
+    <div class="flex justify-around my-8">
+        <div class="text-center">
+            <p>MOTOR</p>
+            <h3 id="v-motor" class="text-3xl font-bold star-red">0°C</h3>
+        </div>
+        <div class="text-center">
+            <p>CVT</p>
+            <h3 id="v-cvt" class="text-3xl font-bold star-red">0°C</h3>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 gap-4 h-40">
+        <canvas id="cSpeed"></canvas>
+        <canvas id="cRpm"></canvas>
+    </div>
 </div>
 
 <script>
-const PASS = "depoisteconto";
+    const PASS = "depoisteconto";
+    // URL Raw apontando para o seu repo rflmendes23
+    const GITHUB_RAW_URL = "https://raw.githubusercontent.com/rflmendes23/testeprincipe2/main/telemetria.json";
 
-// 🔥 COLOQUE SUA URL AQUI
-const GITHUB_RAW_URL = "https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPO/main/telemetria.json";
+    let rpmG, speedG, chartS, chartR;
+    let isRec = true;
 
-let rpmG, speedG, chartS, chartR, chartT;
-let isRec = true;
-let dTotal = 0, vMax = 0;
+    function fazerLogin(){
+        if(document.getElementById('password').value === PASS){
+            document.getElementById('loginWrapper').classList.add('hidden');
+            document.getElementById('telemetryWrapper').classList.remove('hidden');
+            initDash();
+        } else {
+            alert("Senha incorreta");
+        }
+    }
 
-function fazerLogin(){
-if(document.getElementById('password').value === PASS){
-document.getElementById('loginWrapper').classList.add('hidden');
-document.getElementById('telemetryWrapper').classList.remove('hidden');
-initDash();
-}else{alert("Senha incorreta");}
-}
+    function initDash(){
+        rpmG = new RadialGauge({
+            renderTo: 'rpm-gauge',
+            width: 250, height: 250,
+            units: "RPM", maxValue: 5000,
+            colorNeedle: "#f00",
+            animationRule: "bounce"
+        }).draw();
 
-function initDash(){
+        speedG = new RadialGauge({
+            renderTo: 'speed-gauge',
+            width: 250, height: 250,
+            units: "KM/H", maxValue: 120,
+            colorNeedle: "#00b4ff",
+            animationRule: "bounce"
+        }).draw();
 
-rpmG = new RadialGauge({
-renderTo:'rpm-gauge',
-width:250,height:250,
-units:"RPM",
-maxValue:5000,
-colorNeedle:"#f00"
-}).draw();
+        chartS = createChart('cSpeed', '#00b4ff');
+        chartR = createChart('cRpm', '#ff0000');
 
-speedG = new RadialGauge({
-renderTo:'speed-gauge',
-width:250,height:250,
-units:"KM/H",
-maxValue:120,
-colorNeedle:"#00b4ff"
-}).draw();
+        setInterval(loop, 5000); // Atualiza o gráfico a cada 5s
+    }
 
-chartS = createChart('cSpeed','#00b4ff');
-chartR = createChart('cRpm','#ff0000');
-chartT = createChart('cTemp','#ffcc00');
+    function createChart(id, color){
+        return new Chart(document.getElementById(id), {
+            type: 'line',
+            data: { labels: [], datasets: [{ data: [], borderColor: color, borderWidth: 2, fill: false }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+        });
+    }
 
-setInterval(loop,2000);
-}
+    async function loop(){
+        try {
+            // Cache busting forçado
+            const response = await fetch(GITHUB_RAW_URL + "?v=" + new Date().getTime());
+            if (!response.ok) throw new Error("Erro na rede");
+            const data = await response.json();
 
-function createChart(id,color){
-return new Chart(document.getElementById(id),{
-type:'line',
-data:{labels:[],datasets:[{data:[],borderColor:color,borderWidth:3,tension:0.3}]},
-options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}
-});
-}
+            const currentRpm = parseFloat(data.rpm) || 0;
+            const currentSpeed = parseFloat(data.velocidade) || 0;
+            const currentTemp = parseFloat(data.temperatura) || 0;
 
-async function loop(){
-try{
+            rpmG.value = currentRpm;
+            speedG.value = currentSpeed;
+            document.getElementById('v-motor').innerText = currentTemp.toFixed(1) + "°C";
+            document.getElementById('v-cvt').innerText = (currentTemp - 12).toFixed(1) + "°C";
 
-const response = await fetch(GITHUB_RAW_URL + "?cache=" + new Date().getTime());
-const data = await response.json();
+            const timeStr = new Date().toLocaleTimeString();
+            updateChart(chartS, timeStr, currentSpeed);
+            updateChart(chartR, timeStr, currentRpm);
 
-const currentRpm = parseInt(data.rpm) || 0;
-const currentSpeed = parseInt(data.velocidade) || 0;
-const currentTemp = parseFloat(data.temperatura) || 0;
+        } catch (error) {
+            console.error("Erro ao buscar dados:", error);
+        }
+    }
 
-// Atualiza Gauges
-rpmG.value = currentRpm;
-speedG.value = currentSpeed;
-
-// Atualiza Displays
-document.getElementById('v-motor').innerText = currentTemp.toFixed(1)+"°C";
-document.getElementById('v-cvt').innerText = (currentTemp-12).toFixed(1)+"°C";
-
-if(isRec){
-
-const now = new Date();
-const timeStr = now.toLocaleTimeString();
-
-updateChart(chartS,timeStr,currentSpeed);
-updateChart(chartR,timeStr,currentRpm);
-updateChart(chartT,timeStr,currentTemp);
-
-dTotal += currentSpeed*0.0002;
-if(currentSpeed > vMax) vMax = currentSpeed;
-}
-
-}catch(error){
-console.log("Erro ao buscar dados:",error);
-}
-}
-
-function updateChart(chart,label,value){
-chart.data.labels.push(label);
-chart.data.datasets[0].data.push(value);
-if(chart.data.labels.length>20){
-chart.data.labels.shift();
-chart.data.datasets[0].data.shift();
-}
-chart.update();
-}
+    function updateChart(chart, label, value){
+        chart.data.labels.push(label);
+        chart.data.datasets[0].data.push(value);
+        if(chart.data.labels.length > 15){
+            chart.data.labels.shift();
+            chart.data.datasets[0].data.shift();
+        }
+        chart.update();
+    }
 </script>
 
 </body>
